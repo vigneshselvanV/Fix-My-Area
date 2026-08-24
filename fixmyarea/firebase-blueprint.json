@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control and notification preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "format": "email", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["resident", "admin"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "notification_prefs": {
+          "type": "object",
+          "properties": {
+            "in_app": { "type": "boolean" },
+            "email": { "type": "boolean" }
+          }
+        }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Civic issue report containing GPS location, category, AI risk triage score, and status lifecycle",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "user_name": { "type": "string", "maxLength": 100 },
+        "category": {
+          "type": "string",
+          "enum": ["Pothole", "Garbage", "Streetlight", "Water Leak", "Drainage", "Stray Animal"]
+        },
+        "description": { "type": "string", "minLength": 10, "maxLength": 1000 },
+        "image_url": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "address": { "type": "string", "maxLength": 255 },
+        "status": {
+          "type": "string",
+          "enum": ["Reported", "Acknowledged", "In Progress", "Resolved"]
+        },
+        "risk_level": {
+          "type": "string",
+          "enum": ["Low", "Medium", "High", "Critical"]
+        },
+        "suggested_action": { "type": "string", "maxLength": 500 },
+        "upvote_count": { "type": "integer" },
+        "flag_count": { "type": "integer" },
+        "duplicate_of": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "category", "description", "latitude", "longitude", "status", "risk_level"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Notification dispatched to reporter upon status update or interaction",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "report_id": { "type": "string" },
+        "message": { "type": "string", "maxLength": 300 },
+        "read": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "report_id", "message", "read"]
+    },
+    "StatusHistory": {
+      "title": "StatusHistory",
+      "description": "Auditable progression log for report status transitions",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["Reported", "Acknowledged", "In Progress", "Resolved"]
+        },
+        "updated_by": { "type": "string" },
+        "updater_name": { "type": "string" },
+        "notes": { "type": "string", "maxLength": 500 },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["status", "updated_by", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Stores user profiles, roles, and notification preferences."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/Report" },
+      "description": "Stores civic issue tickets."
+    },
+    "/reports/{reportId}/upvotes/{userId}": {
+      "schema": "object",
+      "description": "Subcollection for 1-vote-per-user tracking."
+    },
+    "/reports/{reportId}/flags/{userId}": {
+      "schema": "object",
+      "description": "Subcollection for flag records."
+    },
+    "/reports/{reportId}/status_history/{historyId}": {
+      "schema": { "$ref": "#/entities/StatusHistory" },
+      "description": "Subcollection tracking timeline milestones."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "User notifications for ticket progression."
+    },
+    "/analytics/{date}": {
+      "schema": "object",
+      "description": "Daily analytics aggregates."
+    }
+  }
+}

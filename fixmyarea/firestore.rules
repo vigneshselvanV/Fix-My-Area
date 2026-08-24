@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Check if user has 'admin' role in users collection
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Reports Collection
+    match /reports/{reportId} {
+      // Anyone can read reports for the civic feed and live map
+      allow read: if true;
+      
+      // Creating report requires user to be logged in and set user_id to themselves
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      
+      // Strict field-scoped updates:
+      // Category 1: Admin-only triage updates (status, risk_level, suggested_action, updated_at)
+      // Category 2: Engagement updates (atomic upvote_count / flag_count +/- 1 step increments only)
+      allow update: if isAuthenticated() && (
+        // 1. STATUS & ADMIN TRIAGE UPDATES:
+        (
+          isAdmin() && 
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'risk_level', 'suggested_action', 'updated_at'])
+        ) ||
+        // 2. ENGAGEMENT UPDATES (Upvotes / Flags atomic transactions):
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['upvote_count', 'flag_count']) &&
+          (
+            // When upvote_count changes, it must strictly be +/- 1 (or unchanged)
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['upvote_count']) ||
+             request.resource.data.upvote_count == resource.data.upvote_count + 1 ||
+             request.resource.data.upvote_count == resource.data.upvote_count - 1)
+          ) &&
+          (
+            // When flag_count changes, it must strictly be + 1 (or unchanged)
+            (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['flag_count']) ||
+             request.resource.data.flag_count == resource.data.flag_count + 1)
+          )
+        )
+      );
+
+      // Only admins can delete reports
+      allow delete: if isAdmin();
+
+      // Upvotes Subcollection: 1 vote per user, user can only write their own doc
+      match /upvotes/{userId} {
+        allow read: if true;
+        allow write: if isOwner(userId);
+      }
+
+      // Flags Subcollection: 1 flag per user, user can only write their own doc
+      match /flags/{userId} {
+        allow read: if isAuthenticated();
+        allow write: if isOwner(userId);
+      }
+
+      // Status History Subcollection: readable by all, writable on status updates
+      match /status_history/{historyId} {
+        allow read: if true;
+        allow create: if isAuthenticated();
+      }
+
+      // Community Comments Subcollection
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+        allow update: if isOwner(resource.data.user_id) || isAdmin();
+        allow delete: if isOwner(resource.data.user_id) || isAdmin();
+      }
+
+      // Resolution Feedback & Citizen Verification Subcollection
+      match /resolution_feedback/{feedbackId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+        allow update: if isOwner(resource.data.user_id) || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Civic Broadcasts & Advisories
+    match /broadcasts/{broadcastId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Notifications Collection
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+    }
+
+    // Analytics Rollups
+    match /analytics/{date} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+  }
+}

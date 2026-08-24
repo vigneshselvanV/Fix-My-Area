@@ -1,0 +1,10 @@
+{
+  "name": "FixMyArea",
+  "description": "Civic issue-reporting web app for residents and authorities with real-time tracking, duplicate detection, and AI risk assessment.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
